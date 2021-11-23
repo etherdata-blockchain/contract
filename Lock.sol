@@ -1,4 +1,5 @@
-pragma solidity >=0.7.0 <0.9.0;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.0;
 
 contract Lock {
     //合约拥有者账号地址
@@ -9,20 +10,23 @@ contract Lock {
 
     bool _enabled = true;
 
+    uint durationOne = 15 days;
+    uint durationSec = 540 days;
+
     //抵押状态
     struct Record {
         //抵押额度(wei)
         uint value;
-        //单次提取时间(s)
-        uint64 slice;
-        //抵押起始时间(s)
-        uint64 startTime;
-        //总提取次数
-        uint64 count;
-        //已提取次数
-        uint64 freeCount;
         //用户索引
         uint index;
+        //抵押起时间(s)
+        uint64 startTime;
+        //是否已释放首期抵押
+        uint64 stageOne;
+        //已释放二期抵押份数
+        uint64 stageSec;
+        //已释放抵押
+        uint withdrawed;
     }
 
     struct QueryResult {
@@ -30,32 +34,29 @@ contract Lock {
         uint lockedAmount;
         uint withdrawed;
         uint64 startTime;
-        uint64 slice;
-        uint64 count;
     }
 
     constructor() {
         owner = msg.sender;
     }
 
-    event USDTLog(address addr, uint amount, string txid);
+    event USDTLog(address indexed addr, uint amount, string txid);
 
     //直接抵押函数
-    function lockLinear(address addr, uint64 timeSlice, uint64 count, string calldata txid) public payable {
+    function lock540(address addr, uint amount, string calldata txid) public payable {
         require(msg.value > 0, "value cannot be zero");
-        require(address(msg.sender) == address(tx.origin), "no contract");
+        require(msg.value >= amount, "illegal amount");
         require(_enabled, "is disabled");
-        require(count > 0 && count <= 36, "illegal count");
-        require(timeSlice > 0 && timeSlice < 36500, "illegal time");
+        require(address(msg.sender) == address(tx.origin), "no contract");
         require(records[addr].value == 0, "lock exist");
 
         records[addr] = Record({
         value : msg.value,
-        slice : timeSlice * (1 days),
+        index : users.length,
         startTime : uint64(block.timestamp),
-        count : count,
-        freeCount : 0,
-        index : users.length
+        stageOne : 0,
+        stageSec : 0,
+        withdrawed : 0
         });
 
         users.push(addr);
@@ -66,55 +67,46 @@ contract Lock {
     function querySelf() view public returns (uint, QueryResult memory result) {
         require(records[msg.sender].value > 0, "no record");
         Record storage curRecord = records[msg.sender];
-        uint share = curRecord.value / curRecord.count;
 
         result = QueryResult({
         addr : msg.sender,
         lockedAmount : curRecord.value,
-        withdrawed : share * curRecord.freeCount,
-        startTime : curRecord.startTime,
-        slice : curRecord.slice,
-        count : curRecord.count
+        withdrawed : curRecord.withdrawed - balances[msg.sender],
+        startTime : curRecord.startTime
         });
         return (block.timestamp, result);
     }
 
     //查询指定锁仓
-    function queryAny(address addr) view public onlyOwner returns (QueryResult memory result) {
+    function queryAny(address addr) view public onlyOwner returns (uint, QueryResult memory result) {
         require(records[addr].value > 0, "no record");
         Record storage curRecord = records[addr];
-        uint share = curRecord.value / curRecord.count;
 
         result = QueryResult({
         addr : addr,
         lockedAmount : curRecord.value,
-        withdrawed : share * curRecord.freeCount,
-        startTime : curRecord.startTime,
-        slice : curRecord.slice,
-        count : curRecord.count
+        withdrawed : curRecord.withdrawed - balances[addr],
+        startTime : curRecord.startTime
         });
-        return result;
+        return (block.timestamp, result);
     }
 
     //查询全部锁仓
-    function queryAll(uint start, uint size) view public onlyOwner returns (QueryResult[] memory) {
+    function queryAll(uint start, uint size) view public onlyOwner returns (uint, QueryResult[] memory) {
         require(start + size <= users.length, "overflow");
         QueryResult[] memory result = new QueryResult[](size);
 
         uint end = start + size;
         for (uint i = start; i < end; i++) {
             Record storage curRecord = records[users[i]];
-            uint share = curRecord.value / curRecord.count;
             result[i - start] = QueryResult({
             addr : users[i],
             lockedAmount : curRecord.value,
-            withdrawed : share * curRecord.freeCount,
-            startTime : curRecord.startTime,
-            slice : curRecord.slice,
-            count : curRecord.count
+            withdrawed : curRecord.withdrawed - balances[users[i]],
+            startTime : curRecord.startTime
             });
         }
-        return result;
+        return (block.timestamp, result);
     }
 
     function getAllCount() onlyOwner public view returns (uint count) {
@@ -133,35 +125,56 @@ contract Lock {
         delete records[addr];
     }
 
-    function settle_(address addr) private {
+    //结算锁仓，返回是否已结清
+    function settle_(address addr) private returns (bool) {
         Record storage curRecord = records[addr];
-        uint share = curRecord.value / curRecord.count;
         uint curTime = block.timestamp;
 
+        uint64 day = uint64((curTime / (1 days)) - (curRecord.startTime / (1 days)));
         //抵押已到期
-        if (curTime >= curRecord.startTime + curRecord.slice * curRecord.count) {
+        if (day >= 555) {// 15+540
             //剩余抵押
-            uint amount = curRecord.value - share * curRecord.freeCount;
-            curRecord.freeCount = curRecord.count;
+            uint amount = curRecord.value - curRecord.withdrawed;
+            //已结清
+            if (amount == 0) {
+                return true;
+            }
+            curRecord.stageOne = 1;
+            curRecord.stageSec = 540;
+            curRecord.withdrawed = curRecord.value;
             balances[addr] += amount;
-            deleteUser(addr);
-            return;
+            return true;
         }
 
-        uint times = (curTime - uint(curRecord.startTime)) / curRecord.slice;
-        //按时间释放
-        if (times > curRecord.freeCount) {
-            uint amount = (times - curRecord.freeCount) * share;
-            curRecord.freeCount = uint64(times);
+        if (day < 15) {
+            return false;
+        }
+        day -= 15;
+
+        //释放第一阶段
+        uint shareOne = curRecord.value * 5 / 100;
+        if (curRecord.stageOne == 0) {
+            curRecord.stageOne = 1;
+            curRecord.withdrawed += shareOne;
+            balances[addr] += shareOne;
+        }
+
+        //释放第二阶段
+        uint shareSec = curRecord.value - shareOne;
+        if (day > curRecord.stageSec) {
+            uint amount = shareSec * (day - curRecord.stageSec) / 540;
+            curRecord.withdrawed += amount;
+            curRecord.stageSec = day;
             balances[addr] += amount;
         }
+        return false;
     }
 
     //提取指定余额
     function withdrawAmount(uint amount) public {
         require(address(msg.sender) == address(tx.origin), "no contract");
-        if (records[msg.sender].value > 0) {
-            settle_(msg.sender);
+        if (settle_(msg.sender) && amount == balances[msg.sender]) {
+            deleteUser(msg.sender);
         }
 
         require(balances[msg.sender] >= amount, "not enough");
@@ -172,8 +185,8 @@ contract Lock {
     //提取全部余额
     function withdrawAll() public {
         require(address(msg.sender) == address(tx.origin), "no contract");
-        if (records[msg.sender].value > 0) {
-            settle_(msg.sender);
+        if (settle_(msg.sender)) {
+            deleteUser(msg.sender);
         }
 
         uint amount = balances[msg.sender];
@@ -183,7 +196,7 @@ contract Lock {
 
     function transferLock(address addr) public {
         require(records[addr].value == 0, "lock exist");
-        require(addr != msg.sender, "no self");
+        require(addr != msg.sender && addr != address(0), "no self");
 
         users.push(addr);
         records[addr] = records[msg.sender];
