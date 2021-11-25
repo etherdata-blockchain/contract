@@ -4,12 +4,9 @@ pragma solidity >=0.7.0 <0.9.0;
 contract Lock {
     address private owner;
     mapping (address => Record) records;
-    mapping (address => uint) balances;
     address[] users;
     
     bool _enabled = true;
-    
- //   uint durationSec = 540 days;
     
     //抵押状态
     struct Record {
@@ -19,17 +16,13 @@ contract Lock {
         uint64 startTime;
         //总提取次数
         uint index;
-        //是否已经释放首期
-        uint64 stage;
-        //已释放抵押
-        uint withdrawed;
     }
     
     struct QueryResult {
         address addr;
         uint lockedAmount;
-        uint withdrawed;
         uint64 startTime;
+        uint withdrawed;
     }
     
     constructor() {
@@ -47,10 +40,8 @@ contract Lock {
         
         records[addr] = Record({
             value : msg.value,
-            index : users.length,
             startTime : uint64(block.timestamp),
-            stage : 0,
-            withdrawed : 0
+            index : users.length
         });
         users.push(addr);
         emit USDTLog(addr, msg.value, txidUSDT);
@@ -63,7 +54,7 @@ contract Lock {
         result = QueryResult({
             addr : msg.sender,
             lockedAmount : curRecord.value,
-            withdrawed : curRecord.withdrawed - balances[msg.sender],
+            withdrawed : 0,
             startTime : curRecord.startTime
         });
         return(block.timestamp, result);
@@ -78,7 +69,7 @@ contract Lock {
             result[i-start] = QueryResult({
                 addr : users[i],
                 lockedAmount : curRecord.value,
-                withdrawed : curRecord.withdrawed - balances[users[i]],
+                withdrawed : 0,
                 startTime : curRecord.startTime
             });
         }
@@ -91,7 +82,7 @@ contract Lock {
         result = QueryResult({
              addr : addr,
              lockedAmount : curRecord.value,
-             withdrawed : curRecord.withdrawed - balances[addr],
+             withdrawed : 0,
              startTime : curRecord.startTime
         });
         return (block.timestamp, result);
@@ -108,35 +99,16 @@ contract Lock {
         delete records[addr];
     }
     
-    function settle_(address addr) private returns(bool) {
-        Record storage curRecord = records[addr];
-        uint curTime = block.timestamp;
-        
-        uint64 day = uint64(((curTime) / (1 days)) - ((curRecord.startTime) / (1 days)));
-        if (day >= 540){
-            uint amount = curRecord.value - curRecord.withdrawed;
-            if (amount == 0){
-                return true;
-            }
-            curRecord.stage = 1;
-            curRecord.withdrawed = curRecord.value;
-            balances[addr] += amount;
-            return true;
-        }
-
-        return false;
-    
-    }
     
     function withdraAll() public {
         require(address(msg.sender) == address(tx.origin),"no cantract");
-        if (settle_(msg.sender)){
+        Record storage curRecord = records[msg.sender];
+        uint curTime = block.timestamp;
+        uint64 day = uint64(((curTime) / (1 days)) - ((curRecord.startTime) / (1 days)));
+        if (day > 540){
             deleteUser(msg.sender);
-        }
-        
-        uint amount = balances[msg.sender];
-        balances[msg.sender] = 0;
-        payable(msg.sender).transfer(amount);
+            payable(msg.sender).transfer(curRecord.value);
+        }  
     }
     
     
