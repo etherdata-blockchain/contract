@@ -9,8 +9,7 @@ contract Lock {
     
     bool _enabled = true;
     
-    uint durationOne = 15 days;
-    uint durationSec = 540 days;
+ //   uint durationSec = 540 days;
     
     //抵押状态
     struct Record {
@@ -21,9 +20,7 @@ contract Lock {
         //总提取次数
         uint index;
         //是否已经释放首期
-        uint64 stageOne;
-        //二期抵押
-        uint64 stageSec;
+        uint64 stage;
         //已释放抵押
         uint withdrawed;
     }
@@ -52,8 +49,7 @@ contract Lock {
             value : msg.value,
             index : users.length,
             startTime : uint64(block.timestamp),
-            stageOne : 0,
-            stageSec : 0,
+            stage : 0,
             withdrawed : 0
         });
         users.push(addr);
@@ -117,31 +113,17 @@ contract Lock {
         uint curTime = block.timestamp;
         
         uint64 day = uint64(((curTime) / (1 days)) - ((curRecord.startTime) / (1 days)));
-        if (day >= 555){
+        if (day >= 540){
             uint amount = curRecord.value - curRecord.withdrawed;
             if (amount == 0){
                 return true;
             }
-            curRecord.stageOne = 1;
-            curRecord.stageSec = 1;
+            curRecord.stage = 1;
             curRecord.withdrawed = curRecord.value;
             balances[addr] += amount;
             return true;
         }
-        
-        if (day < 15){
-            return false;
-        }
-        
-        day -= 15;
-    
-        uint shareOne = curRecord.value *5 / 100;
-         if (curRecord.stageOne == 0){
-             curRecord.stageOne = 1;
-             curRecord.withdrawed += shareOne;
-             balances[addr] += shareOne;
-        }
-        
+
         return false;
     
     }
