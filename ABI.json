@@ -57,14 +57,14 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint256",
-						"name": "withdrawed",
-						"type": "uint256"
-					},
-					{
 						"internalType": "uint64",
 						"name": "startTime",
 						"type": "uint64"
+					},
+					{
+						"internalType": "uint256",
+						"name": "withdrawed",
+						"type": "uint256"
 					}
 				],
 				"internalType": "struct Lock.QueryResult",
@@ -183,14 +183,14 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint256",
-						"name": "withdrawed",
-						"type": "uint256"
-					},
-					{
 						"internalType": "uint64",
 						"name": "startTime",
 						"type": "uint64"
+					},
+					{
+						"internalType": "uint256",
+						"name": "withdrawed",
+						"type": "uint256"
 					}
 				],
 				"internalType": "struct Lock.QueryResult[]",
@@ -223,14 +223,14 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "uint256",
-						"name": "withdrawed",
-						"type": "uint256"
-					},
-					{
 						"internalType": "uint64",
 						"name": "startTime",
 						"type": "uint64"
+					},
+					{
+						"internalType": "uint256",
+						"name": "withdrawed",
+						"type": "uint256"
 					}
 				],
 				"internalType": "struct Lock.QueryResult",
