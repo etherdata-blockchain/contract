@@ -30,13 +30,14 @@ contract Lock {
     }
     
     event USDTLog(address indexed addr, uint amount, string txid);
-    
+ 
+
     function lock_540_once(address addr, uint amount, string calldata txidUSDT) public payable {
         require(msg.value > 0,"value cannot be zero");
         require(address(msg.sender) == address(tx.origin),"no cantract");
         require(_enabled,"is disable");
         require(records[addr].value == 0,"lock exist");
-        require(msg.value > amount);
+        require(msg.value >= amount,"amount false");
         
         records[addr] = Record({
             value : msg.value,
