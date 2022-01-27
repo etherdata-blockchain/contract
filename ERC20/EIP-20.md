@@ -43,7 +43,7 @@ but interfaces and other contracts MUST NOT expect these values to be present.
 
 
 ``` js
-function name() public view returns (string)
+function _name() public view returns (string)
 ```
 
 
@@ -55,7 +55,7 @@ OPTIONAL - This method can be used to improve usability,
 but interfaces and other contracts MUST NOT expect these values to be present.
 
 ``` js
-function symbol() public view returns (string)
+function _symbol() public view returns (string)
 ```
 
 
@@ -68,7 +68,7 @@ OPTIONAL - This method can be used to improve usability,
 but interfaces and other contracts MUST NOT expect these values to be present.
 
 ``` js
-function decimals() public view returns (uint8)
+function _decimals() public view returns (uint8)
 ```
 
 
@@ -77,7 +77,7 @@ function decimals() public view returns (uint8)
 Returns the total token supply.
 
 ``` js
-function totalSupply() public view returns (uint256)
+function _totalSupply() public view returns (uint256)
 ```
 
 
@@ -87,7 +87,7 @@ function totalSupply() public view returns (uint256)
 Returns the account balance of another account with address `_owner`.
 
 ``` js
-function balanceOf(address _owner) public view returns (uint256 balance)
+function _balanceOf(address _owner) public view returns (uint256 balance)
 ```
 
 
