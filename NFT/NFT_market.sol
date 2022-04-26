@@ -52,7 +52,7 @@ contract ImageContract{
          require(nftToken != address(0),"ERROR ADDRESS");
          NFTTOKEN = NFT_MINT(nftToken);
   }
-/*
+
   function AddCollection(string memory name_, uint256 collectionId, string memory _uri) public {
          NFTTOKEN.Addcollection(name_,collectionId,_uri);
   }
@@ -68,8 +68,8 @@ contract ImageContract{
            recentTokens[49] = _tokenId;
          }
   }
- */
  
+ /*
   function addToken(string memory name_, string memory symbol_, uint256 _tokenId,bytes memory data,string memory _uri) public {
          NFTTOKEN.AddToken(name_, symbol_, _tokenId, data, _uri);
          if (recent_point < 50){
@@ -82,7 +82,7 @@ contract ImageContract{
            recentTokens[49] = _tokenId;
          }
   }
-
+*/
   function approveNFT(address _to,  bool _approved) internal {
     NFTTOKEN.setApprovalForAll(_to, _approved);
   }
