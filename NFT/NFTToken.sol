@@ -2,9 +2,11 @@
 pragma solidity ^0.8.0;
 
 import "./ERC1155.sol";
-
+import "./SafeMath.sol";
 
 contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
+   using SafeMath for uint256;
+
    struct Collection {
        address owner;
        uint256[] allTokens;
@@ -14,7 +16,6 @@ contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
    mapping(uint256 => uint256) tokenFromCollection;
    uint256[] public allCollection;
    mapping(uint256 => Collection) Collections;
-   mapping(address => uint256[])OwnersCollections;
    //collection的信息
    
    struct BidInfo {//竞标信息
@@ -78,11 +79,11 @@ contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
         Collections[collectionId].name = name_;
         Collections[collectionId].uri = _uri;
         allCollection.push(collectionId);
-        OwnersCollections[tx.origin].push(collectionId);
         SaleTokens[collectionId].push(0);
         AucTokens[collectionId].push(0);
         pendingTokens[collectionId].push(0);
     }
+
 
     function AddToken(string memory name_, string memory symbol_, uint256 _tokenId,bytes memory data,string memory _uri, uint256 collectionId) public {
         _mint(tx.origin,_tokenId,1,data);
@@ -135,13 +136,13 @@ contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
             else{
                SaleTokens[collectionId][_listedForSale[_id].index] = _id;
             }
-            SaleTokens[collectionId][0]++; pendingTokens[collectionId][0]--;
+            SaleTokens[collectionId][0]=SaleTokens[collectionId][0].add(1); pendingTokens[collectionId][0]=pendingTokens[collectionId][0].sub(1);
             delete pendingTokens[collectionId][_indexForPending[_id]];
         }
         else {
              allTokens[collectionId][allTokensindex[_id]].status = Tokenstatus.pending;
              pendingTokens[collectionId][_indexForPending[_id]] = _id;
-             pendingTokens[collectionId][0]++; SaleTokens[collectionId][0]--;
+             pendingTokens[collectionId][0]=pendingTokens[collectionId][0].add(1); SaleTokens[collectionId][0]=SaleTokens[collectionId][0].sub(1);
              delete SaleTokens[collectionId][_listedForSale[_id].index];
         }
         _listedForSale[_id].isOnSale = isSale;
@@ -163,13 +164,13 @@ contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
             else{
                AucTokens[collectionId][_listedForAuction[_id].index] = _id;
             }
-            AucTokens[collectionId][0]++; pendingTokens[collectionId][0]--;
+            AucTokens[collectionId][0]=AucTokens[collectionId][0].add(1); pendingTokens[collectionId][0]=pendingTokens[collectionId][0].sub(1);
             delete pendingTokens[collectionId][_indexForPending[_id]];
         }
         else {
             allTokens[collectionId][allTokensindex[_id]].status = Tokenstatus.pending;
             pendingTokens[collectionId][_indexForPending[_id]] = _id;
-            pendingTokens[collectionId][0]++; AucTokens[collectionId][0]--;
+            pendingTokens[collectionId][0]=pendingTokens[collectionId][0].add(1); AucTokens[collectionId][0]=AucTokens[collectionId][0].sub(1);
             delete AucTokens[collectionId][_listedForAuction[_id].index];
         }
         _listedForAuction[_id].isOnSale = isAuction;
@@ -241,8 +242,8 @@ contract NFT_MINT is ERC1155,ERC1155Metadata_URI{
         return tokenFromCollection[_tokenId];
     }
 
-    function getallCollection() external view returns(uint256[] memory){
-        return allCollection;
+    function getCollectionsNum() external view returns(uint256){
+        return allCollection.length;
     }
 
     function getCollectionInfo(uint256 _collectionnId) external view returns(Collection memory){
