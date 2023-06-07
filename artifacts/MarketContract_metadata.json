@@ -39,8 +39,262 @@
 						"type": "uint256"
 					}
 				],
-				"name": "MatchOrder",
+				"name": "MatchFail",
 				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "contractID",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "price",
+						"type": "uint256"
+					}
+				],
+				"name": "MatchSuccess",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "contractID",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					}
+				],
+				"name": "SellOrderCancelled",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "contractID",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "price",
+						"type": "uint256"
+					}
+				],
+				"name": "TradeFail",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "contractID",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "price",
+						"type": "uint256"
+					}
+				],
+				"name": "TradeSuccess",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "seller",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "contractID",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tokenID",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "signature",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "bool",
+								"name": "isOnSale",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "timestamp",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct MarketContract.SellOrder",
+						"name": "sellOrder",
+						"type": "tuple"
+					}
+				],
+				"name": "CancelSellOrder",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "seller",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "contractID",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tokenID",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "signature",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "bool",
+								"name": "isOnSale",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "timestamp",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct MarketContract.SellOrder",
+						"name": "sellOrder",
+						"type": "tuple"
+					},
+					{
+						"internalType": "uint256",
+						"name": "expirationTime",
+						"type": "uint256"
+					}
+				],
+				"name": "CancelSellOrderIfExpired",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_mall",
+						"type": "address"
+					}
+				],
+				"name": "PayFeeTO",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
 			},
 			{
 				"inputs": [
@@ -60,6 +314,62 @@
 				"name": "createProxyWallet",
 				"outputs": [],
 				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "seller",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "contractID",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tokenID",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "signature",
+								"type": "bytes32"
+							},
+							{
+								"internalType": "bool",
+								"name": "isOnSale",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "timestamp",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct MarketContract.SellOrder",
+						"name": "sellOrder",
+						"type": "tuple"
+					}
+				],
+				"name": "getFee",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "pure",
 				"type": "function"
 			},
 			{
@@ -109,6 +419,16 @@
 								"internalType": "bytes32",
 								"name": "signature",
 								"type": "bytes32"
+							},
+							{
+								"internalType": "bool",
+								"name": "isOnSale",
+								"type": "bool"
+							},
+							{
+								"internalType": "uint256",
+								"name": "timestamp",
+								"type": "uint256"
 							}
 						],
 						"internalType": "struct MarketContract.SellOrder",
@@ -116,36 +436,9 @@
 						"type": "tuple"
 					},
 					{
-						"components": [
-							{
-								"internalType": "address",
-								"name": "buyer",
-								"type": "address"
-							},
-							{
-								"internalType": "address",
-								"name": "contractID",
-								"type": "address"
-							},
-							{
-								"internalType": "uint256",
-								"name": "tokenID",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "price",
-								"type": "uint256"
-							},
-							{
-								"internalType": "bytes32",
-								"name": "signature",
-								"type": "bytes32"
-							}
-						],
-						"internalType": "struct MarketContract.BuyOrder",
-						"name": "buyOrder",
-						"type": "tuple"
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
 					}
 				],
 				"name": "matchOrder",
@@ -286,11 +579,11 @@
 			]
 		},
 		"NFT_market_contract.sol": {
-			"keccak256": "0xeb742b8fcbe0f89bb752c422e3e2fa761ef25e107d72ff1b25c2c5bc0f0561ee",
+			"keccak256": "0x6fb8994e6a79d7fc53e9934a0a309c96bcba71f1887021922481628a7cc8a407",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://b0106e5a2150408d3ccb1c87bad24d194cf844f14daa9d6037cd36e50c1d750f",
-				"dweb:/ipfs/QmbyErsiiK97AWt7FssD4XYrYuLm2ShZRSJXprB3ANcMEi"
+				"bzz-raw://5bc949a336eb827f3e72d91c145480a83d3056baba8945a1d3d26ddd61edb152",
+				"dweb:/ipfs/QmY2rPVjd1PD1FMach5VxQ1RUERsXSPACNCZJ2qJyEXnvD"
 			]
 		},
 		"mycontract_token.sol": {

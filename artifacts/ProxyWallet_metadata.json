@@ -17,78 +17,163 @@
 				"type": "constructor"
 			},
 			{
-				"anonymous": false,
 				"inputs": [
 					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "seller",
-						"type": "address"
+						"components": [
+							{
+								"internalType": "address",
+								"name": "seller",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "contractID",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tokenID",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "signature",
+								"type": "bytes32"
+							}
+						],
+						"internalType": "struct ProxyWallet.SellOrder",
+						"name": "sellOrder",
+						"type": "tuple"
 					},
 					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "buyer",
-						"type": "address"
-					},
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "contractID",
-						"type": "address"
-					},
-					{
-						"indexed": false,
 						"internalType": "uint256",
-						"name": "tokenID",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "price",
+						"name": "_value",
 						"type": "uint256"
 					}
 				],
-				"name": "TradeFail",
-				"type": "event"
+				"name": "AtomicTx",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
 			},
 			{
-				"anonymous": false,
 				"inputs": [
 					{
-						"indexed": true,
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"name": "IsInvalid",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "seller",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "contractID",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tokenID",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "signature",
+								"type": "bytes32"
+							}
+						],
+						"internalType": "struct ProxyWallet.SellOrder",
+						"name": "sellOrder",
+						"type": "tuple"
+					}
+				],
+				"name": "cancelOrder",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "mall",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "payFee",
+				"outputs": [],
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "address",
 						"name": "seller",
 						"type": "address"
 					},
 					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "buyer",
-						"type": "address"
-					},
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "contractID",
-						"type": "address"
-					},
-					{
-						"indexed": false,
 						"internalType": "uint256",
-						"name": "tokenID",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "price",
+						"name": "_value",
 						"type": "uint256"
 					}
 				],
-				"name": "TradeSuccess",
-				"type": "event"
+				"name": "paySeller",
+				"outputs": [],
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "refund",
+				"outputs": [],
+				"stateMutability": "payable",
+				"type": "function"
 			},
 			{
 				"inputs": [
@@ -125,41 +210,20 @@
 						"type": "tuple"
 					},
 					{
-						"components": [
-							{
-								"internalType": "address",
-								"name": "buyer",
-								"type": "address"
-							},
-							{
-								"internalType": "address",
-								"name": "contractID",
-								"type": "address"
-							},
-							{
-								"internalType": "uint256",
-								"name": "tokenID",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "price",
-								"type": "uint256"
-							},
-							{
-								"internalType": "bytes32",
-								"name": "signature",
-								"type": "bytes32"
-							}
-						],
-						"internalType": "struct ProxyWallet.BuyOrder",
-						"name": "buyOrder",
-						"type": "tuple"
+						"internalType": "address",
+						"name": "_to",
+						"type": "address"
 					}
 				],
-				"name": "AtomicTx",
-				"outputs": [],
-				"stateMutability": "payable",
+				"name": "transferNFT",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			}
 		],
@@ -295,11 +359,11 @@
 			]
 		},
 		"NFT_market_contract.sol": {
-			"keccak256": "0xeb742b8fcbe0f89bb752c422e3e2fa761ef25e107d72ff1b25c2c5bc0f0561ee",
+			"keccak256": "0x6fb8994e6a79d7fc53e9934a0a309c96bcba71f1887021922481628a7cc8a407",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://b0106e5a2150408d3ccb1c87bad24d194cf844f14daa9d6037cd36e50c1d750f",
-				"dweb:/ipfs/QmbyErsiiK97AWt7FssD4XYrYuLm2ShZRSJXprB3ANcMEi"
+				"bzz-raw://5bc949a336eb827f3e72d91c145480a83d3056baba8945a1d3d26ddd61edb152",
+				"dweb:/ipfs/QmY2rPVjd1PD1FMach5VxQ1RUERsXSPACNCZJ2qJyEXnvD"
 			]
 		},
 		"mycontract_token.sol": {
