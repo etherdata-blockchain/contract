@@ -84,10 +84,11 @@ contract MarketContract {
     function getFee(SellOrder memory sellOrder) public pure returns (uint256) {
         return SafeMath.div(SafeMath.mul(sellOrder.price, 2), 100);
     }
+
     //设置收取手续费
-    function PayFeeTO(address _mall) public  {
-        require(_mall!=address(0),"invalid address");
-        mall=_mall;
+    function PayFeeTO(address _mall) public {
+        require(_mall != address(0), "invalid address");
+        mall = _mall;
     }
 
     // 获取用户的代理钱包地址
@@ -208,7 +209,7 @@ contract MarketContract {
     }
 
     //匹配成功执行交易
-    function _Trade(SellOrder memory sellOrder, uint256 _value) internal  {
+    function _Trade(SellOrder memory sellOrder, uint256 _value) internal {
         // 获取买家的代理钱包地址
         address proxyWallet_Buy = userToProxyWallet[msg.sender];
         address proxyWallet_Sell = userToProxyWallet[sellOrder.seller];
@@ -342,18 +343,15 @@ contract ProxyWallet {
         owner = _owner;
     }
 
-    function markOrderUsed(bytes32 orderHash) internal  {
-       
+    function markOrderUsed(bytes32 orderHash) internal {
         // 将订单标记为无效
         IsInvalid[orderHash] = true;
     }
 
-    function markOrderCancelled(bytes32 orderHash) internal  {
+    function markOrderCancelled(bytes32 orderHash) internal {
         // 将订单标记为无效
         IsInvalid[orderHash] = true;
     }
-
-    
 
     function AtomicTx(
         SellOrder memory sellOrder,
@@ -431,9 +429,9 @@ contract ProxyWallet {
         require(_value > 0, "Insufficient funds");
         payable(seller).transfer(_value);
     }
-    
+
     //收取手续费
-    function payFee(address mall,uint256 _value) public payable {
+    function payFee(address mall, uint256 _value) public payable {
         require(_value > 0, "Insufficient funds");
         //买家向mall支付手续费
         payable(mall).transfer(_value);
