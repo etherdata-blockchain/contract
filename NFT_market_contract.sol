@@ -5,65 +5,35 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "./mycontract_token.sol";
+import "./Imarket.sol";
 
-contract MarketContract {
-    //事件：交易成功
-    event TradeSuccess(
-        address indexed seller,
-        address indexed buyer,
-        address indexed contractID,
-        uint256 tokenID,
-        uint256 price
-    );
-    //事件：交易失败
-    event TradeFail(
-        address indexed seller,
-        address indexed buyer,
-        address indexed contractID,
-        uint256 tokenID,
-        uint256 price
-    );
-    //事件：撤销订单
-    event SellOrderCancelled(
-        address indexed seller,
-        address indexed contractID,
-        uint256 tokenID
-    );
-    //事件：撮合失败
-    event MatchFail(
-        address indexed seller,
-        address indexed buyer,
-        address indexed contractID,
-        uint256 tokenID,
-        uint256 price
-    );
-    //匹配订单成功
-    event MatchSuccess(
-        address indexed seller,
-        address indexed buyer,
-        address indexed contractID,
-        uint256 tokenID,
-        uint256 price
-    );
-
+contract MarketContract is Imarket {
+    using SafeMath for uint256;
     struct SellOrder {
         address seller; // 卖家地址
         address contractID; // NFT 合约地址
         uint256 tokenID; // NFT 的 tokenId
         uint256 price; // 卖单的价格
-        bytes32 signature; // 签名
-        bool isOnSale; // 是否在售
-        uint256 timestamp; // 时间戳
+        bytes signature; // 签名
+        uint256 expirationTime; // 时间戳
+        bytes32 orderID; //订单ID
     }
 
     // 代理钱包合约
     address private proxyWalletContract;
     // 收取手续费的地址
     address private mall;
+    //市场的费率
+    uint256 private feeRate = 2;
+    // 合约拥有者
+    address private owner;
 
     // 用户地址到代理钱包地址的映射关系
     mapping(address => address) private userToProxyWallet;
+
+    constructor(address _owner) {
+        owner = _owner;
+    }
 
     // 创建代理钱包
     function createProxyWallet() public {
@@ -80,14 +50,22 @@ contract MarketContract {
         userToProxyWallet[msg.sender] = proxyWalletContract;
     }
 
-    //查询手续费
-    function getFee(SellOrder memory sellOrder) public pure returns (uint256) {
-        return SafeMath.div(SafeMath.mul(sellOrder.price, 2), 100);
+    //修改费率（仅owner）
+    function updateFeeRate(uint256 newFeeRate) public {
+        require(msg.sender == owner, "only owner can call this");
+        uint256 oldFeeRate = feeRate;
+        feeRate = newFeeRate;
+        emit UpdateFeeRate(oldFeeRate, newFeeRate);
     }
 
-    //设置收取手续费
-    function PayFeeTO(address _mall) public {
-        require(_mall != address(0), "invalid address");
+    //查询费率
+    function getFeeRate() public view returns (uint256) {
+        return feeRate;
+    }
+
+    //设置收取手续费的地址（仅owner）
+    function setMall(address _mall) public {
+        require(msg.sender == owner, "only owner can call this");
         mall = _mall;
     }
 
@@ -97,51 +75,55 @@ contract MarketContract {
     }
 
     //卖家主动下架
-    function CancelSellOrder(SellOrder memory sellOrder) public {
-        // 确保调用者是订单的卖家
-        require(
-            msg.sender == sellOrder.seller,
-            "Only seller can cancel the order"
-        );
-        _cancelSellOrder(sellOrder);
+    modifier onlySeller(address seller) {
+        require(msg.sender == seller, "Only seller can call this function");
+        _;
     }
 
-    //超时撤销
-    function CancelSellOrderIfExpired(
-        SellOrder memory sellOrder,
-        uint256 expirationTime
-    ) public {
-        // 确保订单存在且正在售卖中
-        require(sellOrder.isOnSale, "Order does not exist or is not on sale");
-
-        // 检查订单是否已超过过期时间
-        if (block.timestamp >= sellOrder.timestamp + expirationTime) {
-            _cancelSellOrder(sellOrder);
-        }
+    function CancelSellOrder(
+        SellOrder memory sellOrder
+    ) public onlySeller(sellOrder.seller) {
+        _cancelSellOrder(sellOrder);
     }
 
     //撤销订单
     function _cancelSellOrder(SellOrder memory sellOrder) internal {
-        // 确保订单存在
-        require(sellOrder.isOnSale, "Order does not exist or is not on sale");
-
         //delagatecall调用代理钱包合约的cancelSellOrder方法
-        (bool success, bytes memory data) = userToProxyWallet[sellOrder.seller]
+        (bool success1, bytes memory data) = userToProxyWallet[sellOrder.seller]
             .delegatecall(
                 abi.encodeWithSignature("cancelSellOrder(SellOrder)", sellOrder)
             );
-        require(success, "Cancel sell order failed");
+        require(success1, "Cancel sell order failed");
         //触发事件
         emit SellOrderCancelled(
             sellOrder.seller,
             sellOrder.contractID,
+            sellOrder.orderID,
             sellOrder.tokenID
         );
-        // 取消订单
-        sellOrder.isOnSale = false;
     }
 
-    function matchOrder(SellOrder memory sellOrder, uint256 _value) public {
+    function matchOrder(
+        address seller, // 卖家地址
+        address contractID, // NFT 合约地址
+        uint256 tokenID, // NFT 的 tokenId
+        uint256 price, // 卖单的价格
+        bytes memory signature, // 签名
+        uint256 expirationTime, // 时间戳
+        bytes32 orderID //订单ID
+    ) public payable {
+        //发送代币给合约
+        SellOrder memory sellOrder = SellOrder(
+            seller,
+            contractID,
+            tokenID,
+            price,
+            signature,
+            expirationTime,
+            orderID
+        );
+        uint256 _value = msg.value;
+        uint256 fee = sellOrder.price.mul(feeRate).div(100);
         // 校验 sellOrder 的签名
         require(
             verifySignature(
@@ -149,7 +131,8 @@ contract MarketContract {
                 sellOrder.contractID,
                 sellOrder.tokenID,
                 sellOrder.price,
-                sellOrder.signature
+                sellOrder.signature,
+                sellOrder.expirationTime
             ),
             "Invalid signature"
         );
@@ -165,7 +148,6 @@ contract MarketContract {
             userToProxyWallet[sellOrder.seller] != address(0),
             "Proxy wallet not found"
         );
-        require(sellOrder.isOnSale == true, "This order is not on sale");
 
         //检查卖家是否是这个token的所有者
         require(
@@ -173,106 +155,88 @@ contract MarketContract {
                 sellOrder.seller,
             "Seller is not the owner of this token"
         );
-        // 确保订单存在
-        require(sellOrder.isOnSale, "Order does not exist or is not on sale");
+
+        //检查订单是否超时
+        if (block.timestamp > sellOrder.expirationTime) {
+            _cancelSellOrder(sellOrder);
+            emit OrderExpired(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.orderID,
+                sellOrder.tokenID
+            );
+            return;
+        }
+        //调用代理钱包的isOrderValid方法，检查订单是否有效
+        bytes32 Hash = keccak256(
+            abi.encodePacked(
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.signature
+            )
+        );
+        (bool isValid, bytes memory datas) = proxyWallet_Sell.delegatecall(
+            abi.encodeWithSignature("isOrderValid(bytes32)", Hash)
+        );
+        //data是返回的bool值
+        bool isOrderValid = abi.decode(datas, (bool));
+        require(isValid && !isOrderValid, "Order is not valid");
 
         //delagatecall调用代理钱包合约的atomicTx方法
-        (bool success, bytes memory data) = proxyWallet_Sell.delegatecall(
+
+        (bool success, bytes memory data) = proxyWallet_Sell.call(
             abi.encodeWithSignature(
                 "atomicTx(SellOrder,uint256)",
                 sellOrder,
-                _value
+                _value - fee
             )
         );
+
         bool Istransfer = abi.decode(data, (bool));
         if (success && Istransfer) {
-            //匹配成功，触发事件
-            emit MatchSuccess(
-                sellOrder.seller,
-                msg.sender,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price
-            );
-            //进行交易
-            _Trade(sellOrder, _value);
+            matchsuccess(sellOrder);
+
+            //转移手续费
+            payable(mall).transfer(fee);
+            //转移剩余的钱,如果不成功，退还给买家
+            if (!payable(sellOrder.seller).send(_value - fee)) {
+                payable(msg.sender).transfer(_value - fee);
+                payable(msg.sender).transfer(fee);
+            }
         } else {
             //匹配失败
-            emit MatchFail(
-                sellOrder.seller,
-                msg.sender,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price
-            );
+            matchfail(sellOrder);
         }
     }
 
-    //匹配成功执行交易
-    function _Trade(SellOrder memory sellOrder, uint256 _value) internal {
-        // 获取买家的代理钱包地址
-        address proxyWallet_Buy = userToProxyWallet[msg.sender];
-        address proxyWallet_Sell = userToProxyWallet[sellOrder.seller];
-        //调用卖家的代理钱包合约的transferNFT，将NFT转移给买家
-        (bool success_transfer, bytes memory data_Istransfer) = proxyWallet_Sell
-            .delegatecall(
-                abi.encodeWithSignature(
-                    "transferNFT(SellOrder,address)",
-                    sellOrder,
-                    msg.sender
-                )
-            );
-        bool Istransfer = abi.decode(data_Istransfer, (bool));
-        if (Istransfer && success_transfer) {
-            //成功转移nft给买家后，转移代币给卖家
-            //买家发送交易附带的代币，将_value发送给合约地址
-            (bool success_tra, bytes memory data) = proxyWallet_Buy
-                .delegatecall(
-                    abi.encodeWithSignature(
-                        "paySeller(address,uint256)",
-                        sellOrder.seller,
-                        _value
-                    )
-                );
-            require(success_tra, "Transfer failed");
-            //收取手续费
-            (bool success_fee, bytes memory data_fee) = proxyWallet_Buy
-                .delegatecall(
-                    abi.encodeWithSignature(
-                        "payFee(address,uint256)",
-                        mall,
-                        getFee(sellOrder)
-                    )
-                );
-            //触发交易成功事件
-            emit TradeSuccess(
-                sellOrder.seller,
-                msg.sender,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price
-            );
-        } else {
-            //转移失败，退回钱和手续费给买家
-            (bool success1, bytes memory data1) = proxyWallet_Buy.delegatecall(
-                abi.encodeWithSignature("refund(uint256)", _value)
-            );
-            (bool success, bytes memory data) = proxyWallet_Buy.delegatecall(
-                abi.encodeWithSignature("refund(uint256)", getFee(sellOrder))
-            );
-            //触发交易失败事件
-            emit TradeFail(
-                sellOrder.seller,
-                msg.sender,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price
-            );
-        }
+    function matchsuccess(SellOrder memory sellOrder) internal {
+        //匹配成功，触发事件
+        emit MatchSuccess(
+            sellOrder.seller,
+            msg.sender,
+            sellOrder.contractID,
+            sellOrder.tokenID,
+            sellOrder.orderID,
+            sellOrder.price
+        );
+    }
+
+    function matchfail(SellOrder memory sellOrder) internal {
+        emit MatchFail(
+            sellOrder.seller,
+            msg.sender,
+            sellOrder.contractID,
+            sellOrder.tokenID,
+            sellOrder.orderID,
+            sellOrder.price
+        );
     }
 
     //卖方买方调用进行授权
     function approveCollection(address collectionAddress) public {
+        require(userToProxyWallet[msg.sender] != address(0), "no proxy wallet");
         ProxyWallet proxyWallet = ProxyWallet(userToProxyWallet[msg.sender]);
 
         //contractid为collectionAddress的合约，调用approveAll给该用户对应的ProxyWallet
@@ -293,28 +257,31 @@ contract MarketContract {
         address contractID,
         uint256 tokenID,
         uint256 price,
-        bytes32 signature
+        bytes memory signature,
+        uint256 expirationTime
     ) internal pure returns (bool) {
-        bytes32 hash = keccak256(abi.encodePacked(contractID, tokenID, price));
-        bytes32 orderHash = keccak256(
+        bytes32 hash = keccak256(
+            abi.encodePacked(contractID, tokenID, price, expirationTime)
+        );
+        bytes32 OrderHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
         );
-        address recoveredSigner = recoverSigner(orderHash, signature);
-        return recoveredSigner == seller;
+
+        return recoverSigner(OrderHash, signature) == seller;
     }
 
     function recoverSigner(
         bytes32 hash,
-        bytes32 signature
+        bytes memory signature
     ) internal pure returns (address) {
         bytes32 r;
         bytes32 s;
         uint8 v;
 
         assembly {
-            r := mload(add(signature, 32))
-            s := mload(add(signature, 64))
-            v := byte(0, mload(add(signature, 96)))
+            r := mload(add(signature, 0x20))
+            s := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
         }
 
         if (v < 27) {
@@ -336,16 +303,13 @@ contract ProxyWallet {
         address contractID; // NFT 合约地址
         uint256 tokenID; // NFT 的 tokenId
         uint256 price; // 卖单的价格
-        bytes32 signature; // 签名，使用 hash(token, price) 进行签名
+        bytes signature; // 签名
+        uint256 expirationTime; // 时间戳
+        uint256 orderID; // 订单ID
     }
 
     constructor(address _owner) {
         owner = _owner;
-    }
-
-    function markOrderUsed(bytes32 orderHash) internal {
-        // 将订单标记为无效
-        IsInvalid[orderHash] = true;
     }
 
     function markOrderCancelled(bytes32 orderHash) internal {
@@ -353,18 +317,29 @@ contract ProxyWallet {
         IsInvalid[orderHash] = true;
     }
 
+    //用于查询订单是否被撤销或者被使用
+    function isOrderInvalid(bytes32 orderHash) public view returns (bool) {
+        return IsInvalid[orderHash];
+    }
+
     function AtomicTx(
         SellOrder memory sellOrder,
         uint256 _value
     ) public returns (bool) {
-        //添加订单
         bytes32 Hash = keccak256(
             abi.encodePacked(
                 sellOrder.contractID,
                 sellOrder.tokenID,
-                sellOrder.price
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.signature
             )
         );
+        //检验订单是否已经超时
+        if (sellOrder.expirationTime < block.timestamp) {
+            markOrderCancelled(Hash);
+            return false;
+        }
 
         // 检查订单是否已被使用
         require(!IsInvalid[Hash], "Order has been used");
@@ -376,22 +351,26 @@ contract ProxyWallet {
                 sellOrder.contractID,
                 sellOrder.tokenID,
                 sellOrder.price,
-                sellOrder.signature
+                sellOrder.signature,
+                sellOrder.expirationTime
             ),
             "Invalid signature"
         );
 
         if (_value >= sellOrder.price) {
-            return true;
-
-            bytes32 orderHash = keccak256(
-                abi.encodePacked(
-                    sellOrder.contractID,
-                    sellOrder.tokenID,
-                    sellOrder.price
+            //调用合约的transferFrom方法，将token转给_to
+            try
+                IERC721(sellOrder.contractID).transferFrom(
+                    sellOrder.seller,
+                    msg.sender,
+                    sellOrder.tokenID
                 )
-            );
-            markOrderUsed(orderHash);
+            {
+                markOrderCancelled(Hash);
+                return true;
+            } catch {
+                return false;
+            }
         } else {
             return false;
         }
@@ -406,7 +385,8 @@ contract ProxyWallet {
                 sellOrder.contractID,
                 sellOrder.tokenID,
                 sellOrder.price,
-                sellOrder.signature
+                sellOrder.signature,
+                sellOrder.expirationTime
             ),
             "Invalid signature"
         );
@@ -416,52 +396,14 @@ contract ProxyWallet {
             abi.encodePacked(
                 sellOrder.contractID,
                 sellOrder.tokenID,
-                sellOrder.price
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.signature
             )
         );
 
         // 标记订单为已撤销
         markOrderCancelled(Hash);
-    }
-
-    //支付给卖家
-    function paySeller(address seller, uint256 _value) public payable {
-        require(_value > 0, "Insufficient funds");
-        payable(seller).transfer(_value);
-    }
-
-    //收取手续费
-    function payFee(address mall, uint256 _value) public payable {
-        require(_value > 0, "Insufficient funds");
-        //买家向mall支付手续费
-        payable(mall).transfer(_value);
-    }
-
-    //返还代币给买家
-    function refund(uint256 _value) public payable {
-        require(_value > 0, "Insufficient funds");
-        //仅有owner可以调用
-        require(msg.sender == owner, "Only owner can call this function");
-        payable(msg.sender).transfer(_value);
-    }
-
-    //nft的转移操作
-    function transferNFT(
-        SellOrder memory sellOrder,
-        address _to
-    ) public returns (bool) {
-        //调用合约的transferFrom方法，将token转给_to
-        try
-            IERC721(sellOrder.contractID).transferFrom(
-                sellOrder.seller,
-                _to,
-                sellOrder.tokenID
-            )
-        {
-            return true;
-        } catch {
-            return false;
-        }
     }
 
     // 校验签名
@@ -470,19 +412,22 @@ contract ProxyWallet {
         address contractID,
         uint256 tokenID,
         uint256 price,
-        bytes32 signature
+        bytes memory signature,
+        uint256 expirationTime
     ) internal pure returns (bool) {
-        bytes32 hash = keccak256(abi.encodePacked(contractID, tokenID, price));
-        bytes32 orderHash = keccak256(
+        bytes32 hash = keccak256(
+            abi.encodePacked(contractID, tokenID, price, expirationTime)
+        );
+        bytes32 OrderHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
         );
-        address recoveredSigner = recoverSigner(orderHash, signature);
-        return recoveredSigner == seller;
+
+        return recoverSigner(OrderHash, signature) == seller;
     }
 
     function recoverSigner(
         bytes32 hash,
-        bytes32 signature
+        bytes memory signature
     ) internal pure returns (address) {
         bytes32 r;
         bytes32 s;
