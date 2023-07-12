@@ -13,8 +13,12 @@
 						"type": "address"
 					}
 				],
-				"stateMutability": "nonpayable",
+				"stateMutability": "payable",
 				"type": "constructor"
+			},
+			{
+				"stateMutability": "payable",
+				"type": "fallback"
 			},
 			{
 				"inputs": [
@@ -74,7 +78,7 @@
 						"type": "bool"
 					}
 				],
-				"stateMutability": "nonpayable",
+				"stateMutability": "payable",
 				"type": "function"
 			},
 			{
@@ -242,11 +246,11 @@
 			]
 		},
 		"NFT_market_contract.sol": {
-			"keccak256": "0xcedfefcfb1ed5e04a31cfeb750e56db9185ed129fe19737b593bba5b50912b8e",
+			"keccak256": "0x00b8e2fb97553522b1445d4a60b396cdf81e2a3a65c5ab18b826284a495d3d3e",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://6f3620b3d199adcc022ab03a356f099774995c1f7db51f9701dc918c4fd6952a",
-				"dweb:/ipfs/QmPN6Fi1L8VyR8XFTVLDaPcHcMqnJaSYTaxwjdPzatFsCV"
+				"bzz-raw://aee4700bbdfc1d43184e8c256c1be8fbd2f7448080d0f6d021fc25d77b09bc85",
+				"dweb:/ipfs/QmazstKF9DbLtHevMX7JxPuEq8wjCZmp8uEKeiYAUQtBWW"
 			]
 		}
 	},

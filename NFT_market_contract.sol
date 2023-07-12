@@ -31,7 +31,7 @@ contract MarketContract is Imarket {
     // 用户地址到代理钱包地址的映射关系
     mapping(address => address) private userToProxyWallet;
 
-    constructor(address _owner) {
+    constructor(address _owner) payable {
         owner = _owner;
     }
 
@@ -90,9 +90,7 @@ contract MarketContract is Imarket {
     function _cancelSellOrder(SellOrder memory sellOrder) internal {
         //delagatecall调用代理钱包合约的cancelSellOrder方法
         (bool success1, bytes memory data) = userToProxyWallet[sellOrder.seller]
-            .delegatecall(
-                abi.encodeWithSignature("cancelSellOrder(SellOrder)", sellOrder)
-            );
+            .call(abi.encodeWithSignature("cancelOrder(SellOrder)", sellOrder));
         require(success1, "Cancel sell order failed");
         //触发事件
         emit SellOrderCancelled(
@@ -178,7 +176,7 @@ contract MarketContract is Imarket {
             )
         );
         (bool isValid, bytes memory datas) = proxyWallet_Sell.delegatecall(
-            abi.encodeWithSignature("isOrderValid(bytes32)", Hash)
+            abi.encodeWithSignature("isOrderInvalid(bytes32)", Hash)
         );
         //data是返回的bool值
         bool isOrderValid = abi.decode(datas, (bool));
@@ -198,7 +196,6 @@ contract MarketContract is Imarket {
         if (success && Istransfer) {
             matchsuccess(sellOrder);
 
-            //转移手续费
             payable(mall).transfer(fee);
             //转移剩余的钱,如果不成功，退还给买家
             if (!payable(sellOrder.seller).send(_value - fee)) {
@@ -237,7 +234,9 @@ contract MarketContract is Imarket {
     //卖方买方调用进行授权
     function approveCollection(address collectionAddress) public {
         require(userToProxyWallet[msg.sender] != address(0), "no proxy wallet");
-        ProxyWallet proxyWallet = ProxyWallet(userToProxyWallet[msg.sender]);
+        ProxyWallet proxyWallet = ProxyWallet(
+            payable(userToProxyWallet[msg.sender])
+        );
 
         //contractid为collectionAddress的合约，调用approveAll给该用户对应的ProxyWallet
         //调用delegateCall，调用指定collection合约的approveAll给该用户对应的ProxyWallet
@@ -290,6 +289,8 @@ contract MarketContract is Imarket {
 
         return ecrecover(hash, v, r, s);
     }
+
+    fallback() external payable {}
 }
 
 contract ProxyWallet {
@@ -308,7 +309,7 @@ contract ProxyWallet {
         uint256 orderID; // 订单ID
     }
 
-    constructor(address _owner) {
+    constructor(address _owner) payable {
         owner = _owner;
     }
 
@@ -325,7 +326,7 @@ contract ProxyWallet {
     function AtomicTx(
         SellOrder memory sellOrder,
         uint256 _value
-    ) public returns (bool) {
+    ) public payable returns (bool) {
         bytes32 Hash = keccak256(
             abi.encodePacked(
                 sellOrder.contractID,
@@ -445,4 +446,6 @@ contract ProxyWallet {
 
         return ecrecover(hash, v, r, s);
     }
+
+    fallback() external payable {}
 }
