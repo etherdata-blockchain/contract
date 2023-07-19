@@ -64,7 +64,7 @@ contract MarketContract is Imarket {
     }
 
     //设置收取手续费的地址（仅owner）
-    function setMall(address _mall) public {
+    function setMall(address payable _mall) public {
         require(msg.sender == owner, "only owner can call this");
         mall = _mall;
     }
@@ -90,7 +90,12 @@ contract MarketContract is Imarket {
     function _cancelSellOrder(SellOrder memory sellOrder) internal {
         //delagatecall调用代理钱包合约的cancelSellOrder方法
         (bool success1, bytes memory data) = userToProxyWallet[sellOrder.seller]
-            .call(abi.encodeWithSignature("cancelOrder(SellOrder)", sellOrder));
+            .call(
+                abi.encodeWithSignature(
+                    "cancelOrder((address,address,uint256,uint256,bytes,uint256,bytes32))",
+                    sellOrder
+                )
+            );
         require(success1, "Cancel sell order failed");
         //触发事件
         emit SellOrderCancelled(
@@ -122,6 +127,7 @@ contract MarketContract is Imarket {
         );
         uint256 _value = msg.value;
         uint256 fee = sellOrder.price.mul(feeRate).div(100);
+
         // 校验 sellOrder 的签名
         require(
             verifySignature(
@@ -175,27 +181,30 @@ contract MarketContract is Imarket {
                 sellOrder.signature
             )
         );
-        (bool isValid, bytes memory datas) = proxyWallet_Sell.delegatecall(
+        (bool isValid, bytes memory datas) = proxyWallet_Sell.call(
             abi.encodeWithSignature("isOrderInvalid(bytes32)", Hash)
         );
         //data是返回的bool值
         bool isOrderValid = abi.decode(datas, (bool));
         require(isValid && !isOrderValid, "Order is not valid");
 
-        //delagatecall调用代理钱包合约的atomicTx方法
-
+        //delagatecall调用代理钱包合约的atomicTx方
         (bool success, bytes memory data) = proxyWallet_Sell.call(
             abi.encodeWithSignature(
-                "atomicTx(SellOrder,uint256)",
+                "AtomicTx((address,address,uint256,uint256,bytes,uint256,bytes32),uint256,address)",
                 sellOrder,
-                _value - fee
+                _value - fee,
+                msg.sender
             )
         );
 
-        bool Istransfer = abi.decode(data, (bool));
-        if (success && Istransfer) {
+        //检查NFT被成功转移
+        if (
+            IERC721(sellOrder.contractID).ownerOf(sellOrder.tokenID) ==
+            msg.sender
+        ) {
+            //匹配成功
             matchsuccess(sellOrder);
-
             payable(mall).transfer(fee);
             //转移剩余的钱,如果不成功，退还给买家
             if (!payable(sellOrder.seller).send(_value - fee)) {
@@ -203,8 +212,8 @@ contract MarketContract is Imarket {
                 payable(msg.sender).transfer(fee);
             }
         } else {
-            //匹配失败
             matchfail(sellOrder);
+            revert("matchfail");
         }
     }
 
@@ -234,17 +243,10 @@ contract MarketContract is Imarket {
     //卖方买方调用进行授权
     function approveCollection(address collectionAddress) public {
         require(userToProxyWallet[msg.sender] != address(0), "no proxy wallet");
-        ProxyWallet proxyWallet = ProxyWallet(
-            payable(userToProxyWallet[msg.sender])
-        );
-
-        //contractid为collectionAddress的合约，调用approveAll给该用户对应的ProxyWallet
-        //调用delegateCall，调用指定collection合约的approveAll给该用户对应的ProxyWallet
-        //同时触发approveAll事件
         (bool success, bytes memory data) = collectionAddress.delegatecall(
             abi.encodeWithSignature(
-                "setApprovelForAll(address,bool)",
-                address(proxyWallet),
+                "setApprovalForAll(address,bool)",
+                userToProxyWallet[msg.sender],
                 true
             )
         );
@@ -289,8 +291,6 @@ contract MarketContract is Imarket {
 
         return ecrecover(hash, v, r, s);
     }
-
-    fallback() external payable {}
 }
 
 contract ProxyWallet {
@@ -306,7 +306,7 @@ contract ProxyWallet {
         uint256 price; // 卖单的价格
         bytes signature; // 签名
         uint256 expirationTime; // 时间戳
-        uint256 orderID; // 订单ID
+        bytes32 orderID; //订单ID
     }
 
     constructor(address _owner) payable {
@@ -325,8 +325,11 @@ contract ProxyWallet {
 
     function AtomicTx(
         SellOrder memory sellOrder,
-        uint256 _value
-    ) public payable returns (bool) {
+        uint256 _value,
+        address buyer
+    ) public payable {
+        //SellOrder memory sellOrder = abi.decode(sellOrderData, (SellOrder));
+
         bytes32 Hash = keccak256(
             abi.encodePacked(
                 sellOrder.contractID,
@@ -339,7 +342,7 @@ contract ProxyWallet {
         //检验订单是否已经超时
         if (sellOrder.expirationTime < block.timestamp) {
             markOrderCancelled(Hash);
-            return false;
+            return;
         }
 
         // 检查订单是否已被使用
@@ -363,17 +366,17 @@ contract ProxyWallet {
             try
                 IERC721(sellOrder.contractID).transferFrom(
                     sellOrder.seller,
-                    msg.sender,
+                    buyer,
                     sellOrder.tokenID
                 )
             {
                 markOrderCancelled(Hash);
-                return true;
+                return;
             } catch {
-                return false;
+                return;
             }
         } else {
-            return false;
+            return;
         }
     }
 
@@ -407,7 +410,7 @@ contract ProxyWallet {
         markOrderCancelled(Hash);
     }
 
-    // 校验签名
+    //校验签名
     function verifySignature(
         address seller,
         address contractID,
@@ -446,6 +449,4 @@ contract ProxyWallet {
 
         return ecrecover(hash, v, r, s);
     }
-
-    fallback() external payable {}
 }

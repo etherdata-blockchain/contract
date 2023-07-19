@@ -270,10 +270,6 @@
 				"type": "event"
 			},
 			{
-				"stateMutability": "payable",
-				"type": "fallback"
-			},
-			{
 				"inputs": [
 					{
 						"components": [
@@ -421,7 +417,7 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
+						"internalType": "address payable",
 						"name": "_mall",
 						"type": "address"
 					}
@@ -521,11 +517,11 @@
 			]
 		},
 		"NFT_market_contract.sol": {
-			"keccak256": "0x00b8e2fb97553522b1445d4a60b396cdf81e2a3a65c5ab18b826284a495d3d3e",
+			"keccak256": "0x7ef4cffc76becc1997d52b7f9e2d51ac214654d8fb9eeeaea08f444c7ccf9e67",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://aee4700bbdfc1d43184e8c256c1be8fbd2f7448080d0f6d021fc25d77b09bc85",
-				"dweb:/ipfs/QmazstKF9DbLtHevMX7JxPuEq8wjCZmp8uEKeiYAUQtBWW"
+				"bzz-raw://14ca783356281d02600736131f40e2cbeafb26b34928e6a0dd3fdb5c34baef65",
+				"dweb:/ipfs/QmacVJsxKH1P9pZj4mXYRP6A1cE78dvdwVYo6hWvKmHaoy"
 			]
 		}
 	},
