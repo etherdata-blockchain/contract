@@ -85,8 +85,23 @@ contract MarketContract is Imarket {
     }
 
     function CancelSellOrder(
-        SellOrder memory sellOrder
-    ) public onlySeller(sellOrder.seller) {
+        address seller, // 卖家地址
+        address contractID, // NFT 合约地址
+        uint256 tokenID, // NFT 的 tokenId
+        uint256 price, // 卖单的价格
+        bytes memory signature, // 签名
+        uint256 expirationTime, // 时间戳
+        uint256 nonce // nonce
+    ) public onlySeller(seller) {
+        SellOrder memory sellOrder = SellOrder(
+            seller,
+            contractID,
+            tokenID,
+            price,
+            signature,
+            expirationTime,
+            nonce
+        );
         _cancelSellOrder(sellOrder);
     }
 
@@ -176,7 +191,7 @@ contract MarketContract is Imarket {
         (bool isValid, bytes memory datas) = proxyWallet_Sell.call(
             abi.encodeWithSignature("isOrderInvalid(bytes32)", Hash)
         );
-        //data是返回的bool值
+        //data是返回的bool值检查
         bool isOrderValid = abi.decode(datas, (bool));
         require(isValid && !isOrderValid, "Order is not valid");
 
@@ -196,64 +211,24 @@ contract MarketContract is Imarket {
                 msg.sender
             ) {
                 //匹配成功
-                matchsuccess(sellOrder);
+                emit MatchFail(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
                 payable(mall).transfer(fee);
                 //转移剩余的钱,如果不成功，退还给买家
                 if (!payable(sellOrder.seller).send(_value - fee)) {
                     payable(msg.sender).transfer(_value - fee);
                     payable(msg.sender).transfer(fee);
+                    //交易失败
+                    emit TradeFail(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
                 }
+                //交易成功
+                emit TradeSuccess(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
             } else {
-                matchfail(sellOrder);
+                emit MatchFail(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
                 revert("matchfail");
             }
         }else{
             revert("Insufficient payment");
         }
-    }
-
-    function matchsuccess(SellOrder memory sellOrder) internal {
-        //匹配成功，触发事件
-        bytes32 Hash = keccak256( 
-            abi.encodePacked(
-                sellOrder.seller,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price,
-                sellOrder.expirationTime,
-                sellOrder.nonce
-            )
-        );
-        emit MatchSuccess(
-            sellOrder.seller,
-            msg.sender,
-            sellOrder.contractID,
-            sellOrder.tokenID,
-            Hash,//orderid 
-            sellOrder.price
-        );
-    }
-
-    function matchfail(SellOrder memory sellOrder) internal {
-         //匹配成功，触发事件
-        bytes32 Hash = keccak256( 
-            abi.encodePacked(
-                sellOrder.seller,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price,
-                sellOrder.expirationTime,
-                sellOrder.nonce
-            )
-        );
-        emit MatchFail(
-            sellOrder.seller,
-            msg.sender,
-            sellOrder.contractID,
-            sellOrder.tokenID,
-            Hash,//orderid
-            sellOrder.price
-        );
     }
 
     // 校验签名
@@ -349,7 +324,6 @@ contract ProxyWallet {
                 sellOrder.nonce
             )
         );
-
         //检查订单是否已被使用
         require(!IsInvalid[Hash], "Order has been used");
 
