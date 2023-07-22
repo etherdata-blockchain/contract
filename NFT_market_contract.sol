@@ -16,7 +16,7 @@ contract MarketContract is Imarket {
         uint256 price; // 卖单的价格
         bytes signature; // 签名
         uint256 expirationTime; // 时间戳
-        bytes32 orderID; //订单ID
+        uint256 nonce; // nonce
     }
 
     // 代理钱包合约
@@ -70,7 +70,11 @@ contract MarketContract is Imarket {
     }
 
     // 获取用户的代理钱包地址
-    function getProxyWallet(address user) public view returns (address) {
+    function getProxyWallet(address user) public returns (address) {
+        if (userToProxyWallet[user] == address(0)) {
+            proxyWalletContract = address(new ProxyWallet(user));
+            userToProxyWallet[user] = proxyWalletContract;
+        }
         return userToProxyWallet[user];
     }
 
@@ -92,16 +96,25 @@ contract MarketContract is Imarket {
         (bool success1, bytes memory data) = userToProxyWallet[sellOrder.seller]
             .call(
                 abi.encodeWithSignature(
-                    "cancelOrder((address,address,uint256,uint256,bytes,uint256,bytes32))",
+                    "cancelOrder((address,address,uint256,uint256,bytes,uint256,uint256))",
                     sellOrder
                 )
             );
-        require(success1, "Cancel sell order failed");
+            bytes32 Hash = keccak256(
+            abi.encodePacked(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.nonce
+            )
+        );
         //触发事件
         emit SellOrderCancelled(
             sellOrder.seller,
             sellOrder.contractID,
-            sellOrder.orderID,
+            Hash,//orderid
             sellOrder.tokenID
         );
     }
@@ -113,7 +126,7 @@ contract MarketContract is Imarket {
         uint256 price, // 卖单的价格
         bytes memory signature, // 签名
         uint256 expirationTime, // 时间戳
-        bytes32 orderID //订单ID
+        uint256 nonce // nonce
     ) public payable {
         //发送代币给合约
         SellOrder memory sellOrder = SellOrder(
@@ -123,35 +136,14 @@ contract MarketContract is Imarket {
             price,
             signature,
             expirationTime,
-            orderID
+            nonce
         );
         uint256 _value = msg.value;
         uint256 fee = sellOrder.price.mul(feeRate).div(100);
 
-        // 校验 sellOrder 的签名
-        require(
-            verifySignature(
-                sellOrder.seller,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price,
-                sellOrder.signature,
-                sellOrder.expirationTime
-            ),
-            "Invalid signature"
-        );
         // 获取买家的代理钱包地址
-        address proxyWallet_Buy = userToProxyWallet[msg.sender];
         address proxyWallet_Sell = userToProxyWallet[sellOrder.seller];
-
-        require(
-            userToProxyWallet[msg.sender] != address(0),
-            "Proxy wallet not found"
-        );
-        require(
-            userToProxyWallet[sellOrder.seller] != address(0),
-            "Proxy wallet not found"
-        );
+        require(proxyWallet_Sell != address(0), "Proxy wallet not found");
 
         //检查卖家是否是这个token的所有者
         require(
@@ -159,28 +151,28 @@ contract MarketContract is Imarket {
                 sellOrder.seller,
             "Seller is not the owner of this token"
         );
-
+         //调用代理钱包的isOrderValid方法，检查订单是否有效
+        bytes32 Hash = keccak256(
+            abi.encodePacked(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.nonce
+            )
+        );
         //检查订单是否超时
         if (block.timestamp > sellOrder.expirationTime) {
             _cancelSellOrder(sellOrder);
             emit OrderExpired(
                 sellOrder.seller,
                 sellOrder.contractID,
-                sellOrder.orderID,
+                Hash,//orderid
                 sellOrder.tokenID
             );
             return;
-        }
-        //调用代理钱包的isOrderValid方法，检查订单是否有效
-        bytes32 Hash = keccak256(
-            abi.encodePacked(
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price,
-                sellOrder.expirationTime,
-                sellOrder.signature
-            )
-        );
+        }   
         (bool isValid, bytes memory datas) = proxyWallet_Sell.call(
             abi.encodeWithSignature("isOrderInvalid(bytes32)", Hash)
         );
@@ -188,67 +180,79 @@ contract MarketContract is Imarket {
         bool isOrderValid = abi.decode(datas, (bool));
         require(isValid && !isOrderValid, "Order is not valid");
 
-        //delagatecall调用代理钱包合约的atomicTx方
-        (bool success, bytes memory data) = proxyWallet_Sell.call(
-            abi.encodeWithSignature(
-                "AtomicTx((address,address,uint256,uint256,bytes,uint256,bytes32),uint256,address)",
-                sellOrder,
-                _value - fee,
-                msg.sender
-            )
-        );
+        if (_value - fee >= sellOrder.price) {
+            //delagatecall调用代理钱包合约的atomicTx方
+            (bool success, bytes memory data) = proxyWallet_Sell.call(
+                abi.encodeWithSignature(
+                    "AtomicTx((address,address,uint256,uint256,bytes,uint256,uint256),address)",
+                    sellOrder,
+                    msg.sender
+                )
+            );
 
-        //检查NFT被成功转移
-        if (
-            IERC721(sellOrder.contractID).ownerOf(sellOrder.tokenID) ==
-            msg.sender
-        ) {
-            //匹配成功
-            matchsuccess(sellOrder);
-            payable(mall).transfer(fee);
-            //转移剩余的钱,如果不成功，退还给买家
-            if (!payable(sellOrder.seller).send(_value - fee)) {
-                payable(msg.sender).transfer(_value - fee);
-                payable(msg.sender).transfer(fee);
+            //检查NFT被成功转移
+            if (
+                IERC721(sellOrder.contractID).ownerOf(sellOrder.tokenID) ==
+                msg.sender
+            ) {
+                //匹配成功
+                matchsuccess(sellOrder);
+                payable(mall).transfer(fee);
+                //转移剩余的钱,如果不成功，退还给买家
+                if (!payable(sellOrder.seller).send(_value - fee)) {
+                    payable(msg.sender).transfer(_value - fee);
+                    payable(msg.sender).transfer(fee);
+                }
+            } else {
+                matchfail(sellOrder);
+                revert("matchfail");
             }
-        } else {
-            matchfail(sellOrder);
-            revert("matchfail");
+        }else{
+            revert("Insufficient payment");
         }
     }
 
     function matchsuccess(SellOrder memory sellOrder) internal {
         //匹配成功，触发事件
+        bytes32 Hash = keccak256( 
+            abi.encodePacked(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.nonce
+            )
+        );
         emit MatchSuccess(
             sellOrder.seller,
             msg.sender,
             sellOrder.contractID,
             sellOrder.tokenID,
-            sellOrder.orderID,
+            Hash,//orderid 
             sellOrder.price
         );
     }
 
     function matchfail(SellOrder memory sellOrder) internal {
+         //匹配成功，触发事件
+        bytes32 Hash = keccak256( 
+            abi.encodePacked(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.nonce
+            )
+        );
         emit MatchFail(
             sellOrder.seller,
             msg.sender,
             sellOrder.contractID,
             sellOrder.tokenID,
-            sellOrder.orderID,
+            Hash,//orderid
             sellOrder.price
-        );
-    }
-
-    //卖方买方调用进行授权
-    function approveCollection(address collectionAddress) public {
-        require(userToProxyWallet[msg.sender] != address(0), "no proxy wallet");
-        (bool success, bytes memory data) = collectionAddress.delegatecall(
-            abi.encodeWithSignature(
-                "setApprovalForAll(address,bool)",
-                userToProxyWallet[msg.sender],
-                true
-            )
         );
     }
 
@@ -259,10 +263,18 @@ contract MarketContract is Imarket {
         uint256 tokenID,
         uint256 price,
         bytes memory signature,
-        uint256 expirationTime
+        uint256 expirationTime,
+        uint256 nonce
     ) internal pure returns (bool) {
         bytes32 hash = keccak256(
-            abi.encodePacked(contractID, tokenID, price, expirationTime)
+            abi.encodePacked(
+                seller,
+                contractID,
+                tokenID,
+                price,
+                expirationTime,
+                nonce
+            )
         );
         bytes32 OrderHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
@@ -306,7 +318,7 @@ contract ProxyWallet {
         uint256 price; // 卖单的价格
         bytes signature; // 签名
         uint256 expirationTime; // 时间戳
-        bytes32 orderID; //订单ID
+        uint256 nonce; //nonce
     }
 
     constructor(address _owner) payable {
@@ -325,30 +337,23 @@ contract ProxyWallet {
 
     function AtomicTx(
         SellOrder memory sellOrder,
-        uint256 _value,
         address buyer
     ) public payable {
-        //SellOrder memory sellOrder = abi.decode(sellOrderData, (SellOrder));
-
         bytes32 Hash = keccak256(
             abi.encodePacked(
+                sellOrder.seller,
                 sellOrder.contractID,
                 sellOrder.tokenID,
                 sellOrder.price,
                 sellOrder.expirationTime,
-                sellOrder.signature
+                sellOrder.nonce
             )
         );
-        //检验订单是否已经超时
-        if (sellOrder.expirationTime < block.timestamp) {
-            markOrderCancelled(Hash);
-            return;
-        }
 
-        // 检查订单是否已被使用
+        //检查订单是否已被使用
         require(!IsInvalid[Hash], "Order has been used");
 
-        // 校验签名
+        //校验签名
         require(
             verifySignature(
                 sellOrder.seller,
@@ -356,26 +361,23 @@ contract ProxyWallet {
                 sellOrder.tokenID,
                 sellOrder.price,
                 sellOrder.signature,
-                sellOrder.expirationTime
+                sellOrder.expirationTime,
+                sellOrder.nonce
             ),
             "Invalid signature"
         );
 
-        if (_value >= sellOrder.price) {
-            //调用合约的transferFrom方法，将token转给_to
-            try
-                IERC721(sellOrder.contractID).transferFrom(
-                    sellOrder.seller,
-                    buyer,
-                    sellOrder.tokenID
-                )
-            {
-                markOrderCancelled(Hash);
-                return;
-            } catch {
-                return;
-            }
-        } else {
+        //调用合约的transferFrom方法，将token转给_to
+        try
+            IERC721(sellOrder.contractID).transferFrom(
+                sellOrder.seller,
+                buyer,
+                sellOrder.tokenID
+            )
+        {
+            markOrderCancelled(Hash);
+            return;
+        } catch {
             return;
         }
     }
@@ -390,19 +392,19 @@ contract ProxyWallet {
                 sellOrder.tokenID,
                 sellOrder.price,
                 sellOrder.signature,
-                sellOrder.expirationTime
+                sellOrder.expirationTime,
+                sellOrder.nonce
             ),
             "Invalid signature"
         );
-
-        //添加订单
         bytes32 Hash = keccak256(
             abi.encodePacked(
+                sellOrder.seller,
                 sellOrder.contractID,
                 sellOrder.tokenID,
                 sellOrder.price,
                 sellOrder.expirationTime,
-                sellOrder.signature
+                sellOrder.nonce
             )
         );
 
@@ -411,21 +413,29 @@ contract ProxyWallet {
     }
 
     //校验签名
+    // 校验签名
     function verifySignature(
         address seller,
         address contractID,
         uint256 tokenID,
         uint256 price,
         bytes memory signature,
-        uint256 expirationTime
+        uint256 expirationTime,
+        uint256 nonce
     ) internal pure returns (bool) {
         bytes32 hash = keccak256(
-            abi.encodePacked(contractID, tokenID, price, expirationTime)
+            abi.encodePacked(
+                seller,
+                contractID,
+                tokenID,
+                price,
+                expirationTime,
+                nonce
+            )
         );
         bytes32 OrderHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
         );
-
         return recoverSigner(OrderHash, signature) == seller;
     }
 

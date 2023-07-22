@@ -304,9 +304,9 @@
 								"type": "uint256"
 							},
 							{
-								"internalType": "bytes32",
-								"name": "orderID",
-								"type": "bytes32"
+								"internalType": "uint256",
+								"name": "nonce",
+								"type": "uint256"
 							}
 						],
 						"internalType": "struct MarketContract.SellOrder",
@@ -315,19 +315,6 @@
 					}
 				],
 				"name": "CancelSellOrder",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "collectionAddress",
-						"type": "address"
-					}
-				],
-				"name": "approveCollection",
 				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
@@ -368,7 +355,7 @@
 						"type": "address"
 					}
 				],
-				"stateMutability": "view",
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -404,9 +391,9 @@
 						"type": "uint256"
 					},
 					{
-						"internalType": "bytes32",
-						"name": "orderID",
-						"type": "bytes32"
+						"internalType": "uint256",
+						"name": "nonce",
+						"type": "uint256"
 					}
 				],
 				"name": "matchOrder",
@@ -517,11 +504,11 @@
 			]
 		},
 		"NFT_market_contract.sol": {
-			"keccak256": "0x7ef4cffc76becc1997d52b7f9e2d51ac214654d8fb9eeeaea08f444c7ccf9e67",
+			"keccak256": "0x2d3a639a10b8c0ec2620fc787938508e15043cc7fb3b83e911b6bf1760ab1d1b",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://14ca783356281d02600736131f40e2cbeafb26b34928e6a0dd3fdb5c34baef65",
-				"dweb:/ipfs/QmacVJsxKH1P9pZj4mXYRP6A1cE78dvdwVYo6hWvKmHaoy"
+				"bzz-raw://a8a652945d2b81690355b5da9b63d5d6d4dee0b27b3a6fbd0eb81efa547543aa",
+				"dweb:/ipfs/QmSzVbYrqCYLfgsULdxXdX2vggUAo6w7hCRLYdoboCuLpc"
 			]
 		}
 	},
