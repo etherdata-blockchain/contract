@@ -50,9 +50,13 @@ contract MarketContract is Imarket {
         userToProxyWallet[msg.sender] = proxyWalletContract;
     }
 
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
     //修改费率（仅owner）
-    function updateFeeRate(uint256 newFeeRate) public {
-        require(msg.sender == owner, "only owner can call this");
+    function updateFeeRate(uint256 newFeeRate) public onlyOwner {
         uint256 oldFeeRate = feeRate;
         feeRate = newFeeRate;
         emit UpdateFeeRate(oldFeeRate, newFeeRate);
@@ -64,8 +68,7 @@ contract MarketContract is Imarket {
     }
 
     //设置收取手续费的地址（仅owner）
-    function setMall(address payable _mall) public {
-        require(msg.sender == owner, "only owner can call this");
+    function setMall(address payable _mall) public onlyOwner {
         mall = _mall;
     }
 
@@ -80,7 +83,7 @@ contract MarketContract is Imarket {
 
     //卖家主动下架
     modifier onlySeller(address seller) {
-        require(msg.sender == seller, "Only seller can call this function");
+       
         _;
     }
 
@@ -92,7 +95,7 @@ contract MarketContract is Imarket {
         bytes memory signature, // 签名
         uint256 expirationTime, // 时间戳
         uint256 nonce // nonce
-    ) public onlySeller(seller) {
+    ) public {
         SellOrder memory sellOrder = SellOrder(
             seller,
             contractID,
@@ -102,12 +105,12 @@ contract MarketContract is Imarket {
             expirationTime,
             nonce
         );
+        require(msg.sender == seller, "Only seller can call this function");
         _cancelSellOrder(sellOrder);
     }
 
     //撤销订单
     function _cancelSellOrder(SellOrder memory sellOrder) internal {
-        //delagatecall调用代理钱包合约的cancelSellOrder方法
         (bool success1, bytes memory data) = userToProxyWallet[sellOrder.seller]
             .call(
                 abi.encodeWithSignature(
@@ -196,7 +199,6 @@ contract MarketContract is Imarket {
         require(isValid && !isOrderValid, "Order is not valid");
 
         if (_value - fee >= sellOrder.price) {
-            //delagatecall调用代理钱包合约的atomicTx方
             (bool success, bytes memory data) = proxyWallet_Sell.call(
                 abi.encodeWithSignature(
                     "AtomicTx((address,address,uint256,uint256,bytes,uint256,uint256),address)",
@@ -211,13 +213,11 @@ contract MarketContract is Imarket {
                 msg.sender
             ) {
                 //匹配成功
-                emit MatchFail(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
+                emit MatchSuccess(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
                 payable(mall).transfer(fee);
                 //转移剩余的钱,如果不成功，退还给买家
                 if (!payable(sellOrder.seller).send(_value - fee)) {
-                    payable(msg.sender).transfer(_value - fee);
                     payable(msg.sender).transfer(fee);
-                    //交易失败
                     emit TradeFail(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
                 }
                 //交易成功
@@ -358,19 +358,6 @@ contract ProxyWallet {
 
     //撤销订单
     function cancelOrder(SellOrder memory sellOrder) public {
-        // 校验签名
-        require(
-            verifySignature(
-                sellOrder.seller,
-                sellOrder.contractID,
-                sellOrder.tokenID,
-                sellOrder.price,
-                sellOrder.signature,
-                sellOrder.expirationTime,
-                sellOrder.nonce
-            ),
-            "Invalid signature"
-        );
         bytes32 Hash = keccak256(
             abi.encodePacked(
                 sellOrder.seller,
@@ -382,12 +369,15 @@ contract ProxyWallet {
             )
         );
 
+        bytes32 OrderHash = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", Hash)
+        );
+       require(recoverSigner(OrderHash, sellOrder.signature) == sellOrder.seller,"Invalid signature");
+
         // 标记订单为已撤销
         markOrderCancelled(Hash);
     }
 
-    //校验签名
-    // 校验签名
     function verifySignature(
         address seller,
         address contractID,
