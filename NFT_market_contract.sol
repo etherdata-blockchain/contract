@@ -215,7 +215,7 @@ contract MarketContract is Imarket {
                 //匹配成功
                 emit MatchSuccess(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
                 payable(mall).transfer(fee);
-                //转移剩余的钱,如果不成功，退还给买家
+                //转移剩余的钱给卖家,如果不成功，退还给买家
                 if (!payable(sellOrder.seller).send(_value - fee)) {
                     payable(msg.sender).transfer(fee);
                     emit TradeFail(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
