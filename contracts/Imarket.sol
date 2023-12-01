@@ -22,6 +22,24 @@ interface Imarket {
         uint256 tokenID,
         uint256 price
     );
+    //事件：交易成功
+    event TradeSuccess_ERC20(
+        address indexed seller,
+        address indexed buyer,
+        address indexed contractID,
+        bytes32 orderID,
+        uint256 tokenID,
+        uint256 price
+    );
+    //事件：交易失败
+    event TradeFail_ERC20(
+        address indexed seller,
+        address indexed buyer,
+        address indexed contractID,
+        bytes32 orderID,
+        uint256 tokenID,
+        uint256 price
+    );
     //事件：撤销订单
     event SellOrderCancelled(
         address indexed seller,
@@ -49,6 +67,8 @@ interface Imarket {
     );
     //事件：更新费率
     event UpdateFeeRate(uint256 oldFeeRate, uint256 newFeeRate);
+    //erc20费率更新
+    event UpdateFeeRate_ERC20(uint256 oldErc20FeeRate, uint256 newErc20FeeRate);
     //订单超时
     event OrderExpired(
         address indexed seller,

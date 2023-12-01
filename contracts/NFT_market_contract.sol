@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -26,6 +27,8 @@ contract MarketContract is Imarket {
     address private mall;                                         
     //市场的费率
     uint256 private feeRate = 2;
+    //erc20交易的费率
+    uint256 private feeRate_ERC20 = 1;
     // 合约拥有者
     address private owner;
 
@@ -66,6 +69,17 @@ contract MarketContract is Imarket {
     //查询费率
     function getFeeRate() public view returns (uint256) {
         return feeRate;
+    }
+
+    //修改erc20交易费率（仅owner）
+    function updateFeeRate_ERC20(uint256 newFeeRate_ERC20) public onlyOwner {
+        uint256 oldFeeRate_ERC20 = feeRate_ERC20;
+        feeRate_ERC20 = newFeeRate_ERC20;
+        emit UpdateFeeRate_ERC20(oldFeeRate_ERC20, newFeeRate_ERC20);
+    }
+    //查询erc20交易费率
+    function getFeeRate_ERC20() public view returns (uint256) {
+        return feeRate_ERC20;
     }
 
     //设置收取手续费的地址（仅owner）
@@ -225,6 +239,98 @@ contract MarketContract is Imarket {
             }
         }else{
             revert("Insufficient payment");
+        }
+    }
+    function matchOrder_ERC20(
+        address seller, // 卖家地址
+        address contractID, // NFT 合约地址
+        uint256 tokenID, // NFT 的 tokenId
+        uint256 price, // 卖单的价格
+        bytes memory signature, // 签名
+        uint256 expirationTime, // 时间戳
+        uint256 nonce, // nonce
+        address ERC20_address //买家ERC20地址
+    ) public payable {
+        //发送代币给合约
+        SellOrder memory sellOrder = SellOrder(
+            seller,
+            contractID,
+            tokenID,
+            price,
+            signature,
+            expirationTime,
+            nonce
+        );
+
+        // 获取买家的代理钱包地址
+        address proxyWallet_Sell = userToProxyWallet[sellOrder.seller];
+        require(proxyWallet_Sell != address(0), "Proxy wallet not found");
+
+        uint256 fee= sellOrder.price.mul(feeRate_ERC20).div(100);
+
+        //检查卖家是否是这个token的所有者
+        require(
+            IERC721(sellOrder.contractID).ownerOf(sellOrder.tokenID) ==
+                sellOrder.seller,
+            "Seller is not the owner of this token"
+        );
+         //调用代理钱包的isOrderValid方法，检查订单是否有效
+        bytes32 Hash = keccak256(
+            abi.encodePacked(
+                sellOrder.seller,
+                sellOrder.contractID,
+                sellOrder.tokenID,
+                sellOrder.price,
+                sellOrder.expirationTime,
+                sellOrder.nonce
+            )
+        );
+        //检查订单是否超时
+        if (block.timestamp > sellOrder.expirationTime) {
+            _cancelSellOrder(sellOrder);
+            emit OrderExpired(
+                sellOrder.seller,
+                sellOrder.contractID,
+                Hash,//orderid
+                sellOrder.tokenID
+            );
+            return;
+        }
+        //检查订单是否已被使用   
+        (bool isValid, bytes memory datas) = proxyWallet_Sell.call(
+            abi.encodeWithSignature("isOrderInvalid(bytes32)", Hash)
+        );
+        //data是返回的bool值检查
+        bool isOrderValid = abi.decode(datas, (bool));
+        require(isValid && !isOrderValid, "Order is not valid");
+
+        (bool success, bytes memory data) = proxyWallet_Sell.call(
+            abi.encodeWithSignature(
+                "AtomicTx((address,address,uint256,uint256,bytes,uint256,uint256),address)",
+                sellOrder,
+                msg.sender
+            )
+        );
+
+        //检查NFT被成功转移
+        if (
+            IERC721(sellOrder.contractID).ownerOf(sellOrder.tokenID) ==
+            msg.sender
+        ) {
+            //匹配成功
+            emit MatchSuccess(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
+            payable(mall).transfer(fee);
+            //转移ERC20
+            bool success_ERC20 = IERC20(ERC20_address).transferFrom(msg.sender,sellOrder.seller,sellOrder.price);
+            if (success_ERC20 == false) {
+                payable(msg.sender).transfer(fee);
+                emit TradeFail_ERC20(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
+            }
+            //交易成功
+            emit TradeSuccess_ERC20(sellOrder.seller, msg.sender, sellOrder.contractID, Hash, sellOrder.tokenID, sellOrder.price);
+        } else {
+            emit MatchFail(sellOrder.seller, msg.sender, sellOrder.contractID,  sellOrder.tokenID,Hash, sellOrder.price);
+            revert("matchfail");
         }
     }
 
